@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>GCP Multiplayer Test</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 20px; line-height: 1.6; }
+        #messages { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; background: #f9f9f9; }
+        .event { margin-bottom: 5px; padding: 5px; border-bottom: 1px solid #eee; }
+        .server-tag { font-weight: bold; color: #007bff; }
+    </style>
+</head>
+<body>
+    <h1>TP Cloud Run - Phase 2</h1>
+    <div>
+        <strong>Connecté à l'instance : </strong> <span id="server-id">Connexion...</span>
+    </div>
+    
+    <hr>
+
+    <h3>Publier un message</h3>
+    <input type="text" id="msgInput" placeholder="Tapez un message ici..." size="40">
+    <button onclick="sendMessage()">Envoyer</button>
+
+    <h3>État du jeu (Live)</h3>
+    <div id="messages"></div>
+
+    <script>
+        const SERVER_URL = "https://instance-1-pabskrinza-ew.a.run.app"; 
+
+        // 1. Connexion WebSocket
+        const socket = io(SERVER_URL);
+
+        // 2. Réception de l'état initial 
+        socket.on("initial_state", (data) => {
+            document.getElementById("server-id").innerText = data.server_id;
+            const container = document.getElementById("messages");
+            container.innerHTML = "<em>État initial chargé.</em><br>";
+            
+            Object.entries(data.entries).forEach(([key, value]) => {
+                appendMessage(value);
+            });
+        });
+
+        // 3. Réception des mises à jour en temps réel via Pub/Sub [cite: 525]
+        socket.on("update", (update) => {
+            console.log("Update reçu:", update);
+            appendMessage(update.data);
+        });
+
+        // Fonction pour envoyer un message via POST /publish [cite: 527]
+        async function sendMessage() {
+            const input = document.getElementById("msgInput");
+            const message = input.value;
+            if(!message) return;
+
+            try {
+                await fetch(`${SERVER_URL}/publish`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+                input.value = ""; // Vider le champ
+            } catch (err) {
+                console.error("Erreur d'envoi:", err);
+            }
+        }
+
+        function appendMessage(data) {
+            const container = document.getElementById("messages");
+            const div = document.createElement("div");
+            div.className = "event";
+            div.innerHTML = `
+                <span class="server-tag">[${data.server_id}]</span> 
+                <strong>${data.message}</strong> 
+                <small>(${new Date(data.published_at).toLocaleTimeString()})</small>
+            `;
+            container.prepend(div); // Les plus récents en haut
+        }
+    </script>
+</body>
+</html>
